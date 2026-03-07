@@ -2,6 +2,7 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=visualstudio,python,macos
 
 help/
+northwind/
 
 *"Icon\r"
 "Icon\r"
