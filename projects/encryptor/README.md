@@ -1,282 +1,148 @@
 # Encryptor
+### By GhostWhoWalkz
 
-A command-line encryption tool that protects text and files using 7 industry-standard and classic encryption algorithms. Supports both password-based and key file-based encryption, and saves all encrypted output directly to your Desktop. Designed to pair with the **Decryptor** app — anything encrypted here can be fully reversed there.
-
-Built by **GhostWhoWalkz** — follow the journey from trailer park kid, to air force pilot, to burnt out trial attorney teaching herself to code.
-- GitHub: https://www.github.com/GhostWhoWalkz67
-- Blog: https://forgottenfieldnotes.blogspot.com/
+Encrypts text, single files, or entire folders from your Desktop. Every encrypted output is saved as a **random 10-character hex filename with no extension** — the original name, file type, and folder structure are all bundled inside the encrypted blob and completely invisible externally. Nothing is stored outside the encrypted file.
 
 ---
 
-## What It Does
+## What It Can Encrypt
 
-- Encrypts plain text you type directly into the terminal
-- Encrypts any file on your Desktop (any file type — documents, images, code, etc.)
-- Supports password-based encryption (you remember a passphrase) and key file-based encryption (app generates a reusable key file)
-- Saves all encrypted output to Desktop as `.enc` files
-- Saves all generated key files to `~/Desktop/keys/` automatically
-- RSA key pair generation — creates a public and private `.pem` key pair on first use
-- Loops so you can encrypt multiple items in one session
+| Input Type | Description |
+|-----------|-------------|
+| Text | Type any string directly into the terminal |
+| Single file | Any file type — images, videos, PDFs, code, archives, executables |
+| Folder | Entire folder including all subfolders and their contents |
 
 ---
 
-## Supported Algorithms
+## Algorithms
 
-| # | Algorithm | Type | Key Method | Best For |
-|---|-----------|------|------------|----------|
-| 1 | AES-256-CBC | Symmetric | Password or key file | General purpose encryption |
-| 2 | AES-256-GCM | Symmetric | Password or key file | When tamper detection matters |
-| 3 | ChaCha20-Poly1305 | Symmetric | Password or key file | Modern fast encryption |
-| 4 | Fernet | Symmetric | Password or key file | Simple beginner-friendly encryption |
-| 5 | RSA-2048 | Asymmetric | Key file only (public/private pair) | Short text, key exchange |
-| 6 | XOR Cipher | Symmetric | Password | Educational — not secure |
-| 7 | Caesar Cipher | Symmetric | Shift number | Educational — not secure |
+### Standard Mode (files and folders under 250MB)
+
+All 7 algorithms are available:
+
+| # | Algorithm | Key Method | Notes |
+|---|-----------|------------|-------|
+| 1 | AES-256-CBC | Password or key file | Fast, universal, industry standard |
+| 2 | AES-256-GCM | Password or key file | Authenticated — detects tampering |
+| 3 | ChaCha20-Poly1305 | Password or key file | Modern, fast, used in TLS |
+| 4 | Fernet | Password or key file | Simple symmetric encryption |
+| 5 | RSA-2048 | Key file only | Asymmetric — best for short text only (190 byte limit) |
+| 6 | XOR Cipher | Password only | Educational only — not secure for real use |
+| 7 | Caesar Cipher | Shift number | Educational only — not secure for real use |
+
+### Large File Mode (files and folders over 250MB)
+
+Only streaming-capable algorithms are available:
+
+| # | Algorithm | Notes |
+|---|-----------|-------|
+| 1 | AES-256-CBC | Fast, universal |
+| 2 | AES-256-GCM | Authenticated per chunk |
+| 3 | ChaCha20-Poly1305 | Fastest — recommended for large video files |
+
+Large files are processed in 64KB chunks so memory usage stays flat regardless of file size. A 50GB video uses the same ~64KB of RAM as a 1MB photo.
 
 ---
 
-## macOS Terminal Setup
+## How Privacy Works
 
-This app runs entirely in Terminal. Follow these steps from scratch on macOS.
+Everything about the original file is hidden inside the encrypted payload:
 
-### Step 1 — Install Homebrew
+- The **output filename** is a random 10-character hex string (e.g. `a3f8c291b4`) with no extension
+- The **original filename** is bundled into the plaintext *before* encryption — not stored as a header
+- The **file type** is completely invisible — no `.enc`, no extension of any kind
+- For **folders**, every subfolder name and every filename inside are encrypted along with the contents
+- **Nothing is logged externally** — no database, no mapping file, no record of what was encrypted
 
-Homebrew is the package manager for macOS. If you don't have it yet:
+Opening the output file in a hex editor shows pure noise from byte 1. There is no readable metadata anywhere.
+
+---
+
+## Key Methods
+
+**Password** — you type a passphrase. The app derives a 256-bit key using PBKDF2 with 480,000 iterations of SHA-256 and a random 16-byte salt. The salt is embedded in the file so the same password always works on decryption.
+
+**Key file** — the app generates a random 32-byte key file and saves it to `~/Desktop/keys/`. Faster than password-based decryption. Keep this file safe — it is the only way to decrypt.
+
+**RSA key pair** — generates a `_private.pem` and `_public.pem` in `~/Desktop/keys/`. The public key encrypts, the private key decrypts. Hard limit of ~190 bytes of input data.
+
+---
+
+## Folder Encryption
+
+When you choose **Folder**, the app:
+
+1. Walks the entire folder tree and calculates the total uncompressed size
+2. Bundles everything into a `.tar` archive (preserving all subfolder structure)
+3. Checks total size against the 250MB threshold
+4. Encrypts the archive as a single blob — one random-named output file
+5. Cleans up the temporary archive automatically
+
+The entire folder — every filename, every subfolder name, all file contents — is hidden inside the single encrypted output file.
+
+---
+
+## macOS Setup
 
 ```bash
+# Install Homebrew if needed
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
 
-Verify it installed:
-```bash
-brew --version
-```
-
-### Step 2 — Install Python 3
-
-macOS ships with an outdated Python 2. Install Python 3 via Homebrew:
-
-```bash
+# Install Python
 brew install python
+
+# Install dependencies
+pip3 install bcrypt passlib cryptography --break-system-packages
 ```
 
-Verify:
-```bash
-python3 --version
-```
+---
 
-You should see Python 3.11 or higher.
-
-### Step 3 — Install Required Python Library
-
-The app requires the `cryptography` library which provides all encryption algorithms:
-
-```bash
-pip3 install cryptography --break-system-packages
-```
-
-> **Note:** The `--break-system-packages` flag is required on macOS with Python 3.11+. This is normal — it bypasses a warning and installs the package correctly.
-
-Verify it installed:
-```bash
-pip3 show cryptography
-```
-
-### Step 4 — Set Up Your Project Folder
-
-```bash
-mkdir -p ~/Desktop/code/projects/encryptor
-cd ~/Desktop/code/projects/encryptor
-```
-
-Place `main.py` inside that folder.
-
-### Step 5 — Run the App
+## Usage
 
 ```bash
 cd ~/Desktop/code/projects/encryptor
 python3 main.py
 ```
 
----
+Then follow the prompts:
 
-## How to Use
-
-### Basic Flow
-
-1. Run `python3 main.py`
-2. Choose whether to encrypt text or a file
-3. Select an encryption algorithm
-4. Choose your key method — password or key file
-5. Enter your password, or name your key file
-6. Name your output file (saved to Desktop as `.enc`)
-7. Encryption runs and the result is saved
-8. Choose to encrypt something else or quit
-
-### Encrypting Text
-
-Select option `1` at the first prompt and type your text directly into the terminal. The text is encrypted and saved as a `.enc` file on your Desktop.
-
-### Encrypting a File
-
-Select option `2` and the app scans your Desktop and presents a numbered list of all files. Select the number of the file you want to encrypt. Any file type is supported — documents, images, PDFs, code files, etc.
-
-### Password-Based Encryption
-
-When you choose password as the key method, type any passphrase you will remember. The app derives a strong 256-bit encryption key from your password using PBKDF2 with SHA-256 and 480,000 iterations. The salt is automatically embedded in the output file — you only need your password to decrypt later.
-
-### Key File-Based Encryption
-
-When you choose key file, the app generates a random 256-bit key and saves it to `~/Desktop/keys/`. You will be prompted for a key file name — a default is suggested based on the algorithm. On future runs, if the same key file name exists it will be reused automatically.
-
-> **Warning:** Key files must be kept safe. If the key file is deleted or lost, the encrypted data cannot be recovered.
-
-### RSA Encryption
-
-RSA generates a public/private key pair on first use and saves both to `~/Desktop/keys/`. The public key encrypts the data and the private key is required to decrypt it.
-
-> **Important:** RSA can only encrypt up to approximately 190 bytes of text directly. For larger content, use AES-256-GCM or ChaCha20-Poly1305 instead. The app will warn you if your input exceeds this limit.
+```
+What would you like to encrypt?
+  1. Text    (type it in)
+  2. File    (single file from Desktop)
+  3. Folder  (entire folder and all its contents)
+```
 
 ---
 
-## Key Files
+## Output
 
-All generated key files are stored in:
+Every encrypted file is saved to your Desktop as a random hex name with no extension:
 
 ```
-~/Desktop/keys/
+~/Desktop/a3f8c291b4
+~/Desktop/f7d2190c33
 ```
 
-Default key file names by algorithm:
-
-| Algorithm | Default Key File |
-|-----------|-----------------|
-| AES-256-CBC | `aes_256_cbc.key` |
-| AES-256-GCM | `aes_256_gcm.key` |
-| ChaCha20-Poly1305 | `chacha20_poly1305.key` |
-| Fernet | `fernet.key` |
-| RSA-2048 | `<yourname>_private.pem` and `<yourname>_public.pem` |
-
-You can use a custom name for any key file — just remember the name when decrypting.
+The success screen tells you the random name, the original name (which is now hidden inside), and the key info. Write down or copy the random filename if you need to find it again — nothing else on disk identifies it.
 
 ---
 
-## Output Files
+## Notes
 
-Encrypted files are saved to your Desktop with the `.enc` extension. The default naming pattern is:
-
-```
-<original_name>_<algorithm>.enc
-```
-
-For example, encrypting `notes.txt` with AES-256-GCM produces:
-```
-notes_aes_256_gcm.enc
-```
-
-The Decryptor app automatically detects `.enc` files on your Desktop and presents them as a list — no need to type file paths manually.
+- The `~/Desktop/keys/` folder holds all key files and RSA key pairs — back this up
+- If you lose your password or key file, the encrypted data is unrecoverable
+- Encrypting a file that is already encrypted works fine — you just need to decrypt twice
+- macOS extended attributes (Finder tags, Spotlight comments) are not preserved — only file content is encrypted
+- The 250MB threshold applies to the **total uncompressed size** for folders, not individual files inside
 
 ---
 
-## Algorithm Notes
+## Dependencies
 
-**AES-256-CBC**
-The most widely deployed encryption standard in the world. Used in VPNs, HTTPS, file encryption tools, and secure messaging. Fast and extremely well tested. Does not include authentication — a tampered file will decrypt to garbage rather than raising an error.
-
-**AES-256-GCM**
-AES with an authentication tag (GCM mode). If the encrypted file is modified in any way after encryption, decryption will fail with a tamper warning instead of producing corrupted output. This is the recommended choice for most use cases.
-
-**ChaCha20-Poly1305**
-A modern stream cipher used in TLS 1.3, WireGuard VPN, and Signal. Faster than AES on devices without hardware AES acceleration. Also includes authentication — tampered files are detected. Excellent choice for any platform.
-
-**Fernet**
-A high-level symmetric encryption format from the Python `cryptography` library. Handles key generation, IV, and authentication automatically. Easiest to use but output is slightly larger than raw AES. Good for learning and simple projects.
-
-**RSA-2048**
-Unlike the other algorithms, RSA is asymmetric — data encrypted with the public key can only be decrypted with the private key. This is the foundation of public key infrastructure (PKI), SSH, and TLS certificates. Limited to short text in this app due to RSA's block size constraints.
-
-**XOR Cipher**
-A simple bitwise operation cipher included for educational purposes. Not cryptographically secure — given enough ciphertext the key can be recovered. Useful for understanding how basic encryption works at the bit level.
-
-**Caesar Cipher**
-The oldest known substitution cipher, dating to ancient Rome. Shifts every letter by a fixed number of positions. Trivially broken. Included purely for historical and educational context.
-
----
-
-## Using Encryptor + Decryptor Together
-
-These two apps are built as a pair:
-
-1. Open **Encryptor** and encrypt a file or text
-2. The `.enc` file is saved to your Desktop
-3. Open **Decryptor** — it automatically finds the `.enc` file
-4. Select the same algorithm used to encrypt
-5. Enter the same password or key file name
-6. The original content is restored and saved to Desktop
-
-This is also a great way to learn what each algorithm does — encrypt the same text with different algorithms and compare the output sizes, formats, and decryption behavior.
-
----
-
-## Troubleshooting
-
-**"No module named cryptography"**
-Run:
-```bash
+```
 pip3 install cryptography --break-system-packages
 ```
 
-**"python3: command not found"**
-Python 3 is not installed. Run:
-```bash
-brew install python
-```
-
-**RSA encryption failed — input too large**
-RSA in this app is limited to ~190 bytes of text. For anything larger use AES-256-GCM or ChaCha20-Poly1305 instead.
-
-**No files showing in Desktop scan**
-Make sure the file you want to encrypt is saved directly to your Desktop (not in a subfolder). The app only scans the top level of `~/Desktop/`.
-
-**App closes immediately**
-Make sure you are running Python 3.11 or higher:
-```bash
-python3 --version
-```
-If you see 3.9 or lower, upgrade with:
-```bash
-brew upgrade python
-```
-
----
-
-## Dependencies Summary
-
-| Dependency | Install Command | Purpose |
-|------------|-----------------|---------|
-| Homebrew | See Step 1 | macOS package manager |
-| Python 3.11+ | `brew install python` | Runs the app |
-| cryptography | `pip3 install cryptography --break-system-packages` | All encryption algorithms |
-
-That's it — one pip package covers everything.
-
----
-
-## The Full Toolkit
-
-```
-~/Desktop/code/projects/
-    hasher/        → creates cryptographic hashes
-    dehasher/      → identifies and cracks hashes
-    encryptor/     → encrypts text and files (this app)
-    decryptor/     → decrypts anything the encryptor creates
-```
-
----
-
-## Security Notes
-
-- Password-derived keys use **PBKDF2 with SHA-256 and 480,000 iterations** — intentionally slow to resist brute force attacks against the password
-- The salt and nonce/IV are embedded in every `.enc` file automatically — the Decryptor recovers them without any extra input from you
-- AES-256-GCM and ChaCha20-Poly1305 include **authentication tags** — any modification to the encrypted file will cause decryption to fail with a clear error
-- XOR and Caesar ciphers are included for learning only — do not use them to protect anything sensitive
-- RSA private key files are stored as unencrypted `.pem` files — treat them like passwords and back them up securely
+Python's built-in `tarfile`, `struct`, `os`, `secrets`, `hashlib` handle everything else.

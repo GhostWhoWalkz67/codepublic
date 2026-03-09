@@ -1,228 +1,178 @@
 # Decryptor
+### By GhostWhoWalkz
 
-A command-line decryption tool that reverses everything produced by the **Encryptor** app. Supports 7 encryption algorithms including industry-standard AES-256, modern ChaCha20, RSA asymmetric encryption, Fernet, and classic educational ciphers.
-
-Built by **GhostWhoWalkz** — follow the journey from trailer park kid, to air force pilot, to burnt out trial attorney teaching herself to code.
-- GitHub: https://www.github.com/GhostWhoWalkz67
-- Blog: https://forgottenfieldnotes.blogspot.com/
+Decrypts files and folders that were encrypted with the Encryptor app. Automatically detects whether the encrypted file contains a single file or an entire folder, and restores everything — original filename, file type, and full folder structure — exactly as it was before encryption.
 
 ---
 
-## What It Does
+## What It Can Decrypt
 
-- Automatically scans your Desktop for `.enc` files and presents them as a numbered list
-- Supports password-based decryption (PBKDF2 key derivation) and key file-based decryption
-- Shows a preview of the decrypted content in the terminal on success
-- Saves decrypted output back to your Desktop
-- Works as a companion to the **Encryptor** app — anything encrypted there can be decrypted here
-
----
-
-## Supported Algorithms
-
-| # | Algorithm | Key Method | Notes |
-|---|-----------|------------|-------|
-| 1 | AES-256-CBC | Password or key file | Industry standard block cipher |
-| 2 | AES-256-GCM | Password or key file | AES with tamper detection |
-| 3 | ChaCha20-Poly1305 | Password or key file | Modern stream cipher, used in TLS |
-| 4 | Fernet | Password or key file | Simple symmetric encryption |
-| 5 | RSA-2048 | Key file only (private key) | Asymmetric — requires private `.pem` key |
-| 6 | XOR Cipher | Password | Classic educational cipher |
-| 7 | Caesar Cipher | Shift number | Classic letter-shift cipher |
+| Encrypted Content | What Gets Restored |
+|------------------|--------------------|
+| Encrypted text | `.txt` file on Desktop with original content |
+| Encrypted single file | Original file with original filename and extension |
+| Encrypted folder | Full folder tree restored to Desktop |
 
 ---
 
-## macOS Terminal Setup
+## How to Find Encrypted Files
 
-This app runs entirely in Terminal — no GUI required. Follow these steps to get everything working on macOS.
+Encrypted files have **random 10-character hex names and no extension** (e.g. `a3f8c291b4`). The app lists all files on your Desktop and marks likely encrypted ones:
 
-### Step 1 — Install Homebrew
+```
+  Files on Desktop:
 
-Homebrew is the package manager for macOS. If you don't have it yet:
+  1. a3f8c291b4   (1.2 MB)    ← likely encrypted
+  2. f7d2190c33   (847.3 MB)  ← likely encrypted
+  3. notes.txt    (4.1 KB)
+  4. photo.jpg    (3.8 MB)
+```
+
+You pick the file, select the algorithm that was used to encrypt it, enter your password or key file, and the app does the rest.
+
+---
+
+## Algorithms
+
+### Standard Mode (encrypted files under 250MB)
+
+| # | Algorithm | Key Method |
+|---|-----------|------------|
+| 1 | AES-256-CBC | Password or key file |
+| 2 | AES-256-GCM | Password or key file |
+| 3 | ChaCha20-Poly1305 | Password or key file |
+| 4 | Fernet | Password or key file |
+| 5 | RSA-2048 | Key file only |
+| 6 | XOR Cipher | Password only |
+| 7 | Caesar Cipher | Shift number |
+
+### Large File Mode (encrypted files over 250MB)
+
+Automatically used for large files — processes in 64KB chunks:
+
+| # | Algorithm |
+|---|-----------|
+| 1 | AES-256-CBC |
+| 2 | AES-256-GCM |
+| 3 | ChaCha20-Poly1305 |
+
+---
+
+## Folder Decryption
+
+When the encrypted file contains a folder, the app automatically detects it after decryption and extracts the full folder tree to your Desktop.
+
+If a folder with the same name already exists on your Desktop, it asks what you want to do:
+
+```
+  [!] A folder named 'my_project' already exists on your Desktop.
+  [!] What would you like to do?
+  1. Overwrite it
+  2. Rename the restored folder
+  3. Cancel
+```
+
+---
+
+## Output Filenames
+
+The original filename is embedded inside the encrypted file and restored automatically on decryption. No `_decrypted` suffix is added — `vacation.jpg` comes back as `vacation.jpg`, `project_files/` comes back as `project_files/`.
+
+You can override the output name at the prompt if you want to save it under a different name.
+
+---
+
+## Key Methods
+
+**Password** — enter the same passphrase used during encryption. The salt embedded in the file handles the rest automatically.
+
+**Key file** — enter the name of the key file in `~/Desktop/keys/`. The default name is based on the algorithm (e.g. `aes_256_gcm.key`).
+
+**RSA private key** — enter the base name of the key pair. The app looks for `{name}_private.pem` in `~/Desktop/keys/`.
+
+---
+
+## macOS Setup
 
 ```bash
+# Install Homebrew if needed
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
 
-Verify it installed:
-```bash
-brew --version
-```
-
-### Step 2 — Install Python 3
-
-macOS comes with Python 2 which is outdated. Install Python 3 via Homebrew:
-
-```bash
+# Install Python
 brew install python
-```
 
-Verify:
-```bash
-python3 --version
-```
-
-You should see Python 3.11 or higher.
-
-### Step 3 — Install Required Python Libraries
-
-The app depends on the `cryptography` library. Install it with pip:
-
-```bash
+# Install dependencies
 pip3 install cryptography --break-system-packages
 ```
 
-> **Note:** The `--break-system-packages` flag is required on macOS with newer versions of Python (3.11+). This is normal — it simply bypasses a warning and installs the package correctly.
+---
 
-Verify it installed:
-```bash
-pip3 show cryptography
-```
-
-### Step 4 — Set Up Your Project Folder
-
-Create a dedicated folder for the app:
-
-```bash
-mkdir -p ~/Desktop/code/projects/decryptor
-cd ~/Desktop/code/projects/decryptor
-```
-
-Place `main.py` inside that folder.
-
-### Step 5 — Run the App
+## Usage
 
 ```bash
 cd ~/Desktop/code/projects/decryptor
 python3 main.py
 ```
 
----
-
-## How to Use
-
-### Basic Flow
-
-1. Run `python3 main.py`
-2. The app scans your Desktop and shows any `.enc` files as a numbered list
-3. Select the file you want to decrypt
-4. Select the algorithm that was used to encrypt it (must match what the Encryptor used)
-5. Enter your password or key file name depending on how it was encrypted
-6. The decrypted output is saved to your Desktop
-
-### Password-Based Decryption
-
-If the file was encrypted with a password, select option `1` when asked about the key method and type the same password used during encryption. The salt is embedded in the encrypted file automatically — you just need the password.
-
-### Key File-Based Decryption
-
-If the file was encrypted with a key file, select option `2` and enter the key file name. Key files are stored in:
+Then follow the prompts:
 
 ```
-~/Desktop/keys/
+  Files on Desktop:
+
+  1. a3f8c291b4   (1.2 MB)   ← likely encrypted
+  2. f7d2190c33   (412.0 KB) ← likely encrypted
+
+  Select file number: 1
+
+  SELECT ALGORITHM USED TO ENCRYPT
+  1. AES-256-CBC ...
+  ...
+
+  Enter algorithm number: 2
+  How was this file encrypted?
+  1. Password
+  2. Key file
+
+  Enter decryption password: ••••••••
+
+  [+] Original file restored: vacation.jpg
+  Output filename (default: vacation.jpg):
 ```
-
-The default key file names follow this pattern:
-
-| Algorithm | Default Key File Name |
-|-----------|-----------------------|
-| AES-256-CBC | `aes_256_cbc.key` |
-| AES-256-GCM | `aes_256_gcm.key` |
-| ChaCha20-Poly1305 | `chacha20_poly1305.key` |
-| Fernet | `fernet.key` |
-
-### RSA Decryption
-
-RSA requires the **private key** `.pem` file that was generated during encryption. The private key is stored at:
-
-```
-~/Desktop/keys/<keyname>_private.pem
-```
-
-When prompted, enter the base name you used when encrypting (e.g. if you used `mykeys`, enter `mykeys`).
-
-> **Warning:** If you lose the private key file, RSA-encrypted data cannot be recovered. There is no workaround.
-
----
-
-## File & Folder Structure
-
-```
-~/Desktop/
-    keys/                          ← key files live here
-        aes_256_gcm.key
-        chacha20_poly1305.key
-        rsa_keys_private.pem
-        rsa_keys_public.pem
-        ...
-
-~/Desktop/code/projects/
-    encryptor/
-        main.py                    ← creates encrypted files
-    decryptor/
-        main.py                    ← this app — reverses encryption
-```
-
----
-
-## Using Encryptor + Decryptor Together
-
-These two apps are designed to work as a pair:
-
-1. Open the **Encryptor** and encrypt a file or text
-2. The encrypted `.enc` file is saved to your Desktop
-3. Open the **Decryptor** — it will automatically find the `.enc` file
-4. Select the same algorithm you used to encrypt
-5. Enter the same password or key file name
-6. Decrypted output is saved to your Desktop
 
 ---
 
 ## Troubleshooting
 
-**"Wrong password or corrupted file"**
-You entered the wrong password, or the encrypted file was modified after encryption. AES-GCM and ChaCha20 include tamper detection — even a single changed byte will cause decryption to fail.
+**"Decryption failed — wrong password/key or file was tampered with"**
+The password or key file doesn't match what was used to encrypt. Double-check the password and make sure you're selecting the correct algorithm.
 
 **"Key file not found"**
-The key file is missing from `~/Desktop/keys/`. Key files must be present to decrypt. If the key file is gone, the data cannot be recovered.
+The key file is missing from `~/Desktop/keys/`. If it was deleted, the file cannot be decrypted.
 
-**"No module named cryptography"**
-Run:
-```bash
+**"Authentication failed on a chunk"** (large files)
+The file may have been partially corrupted or modified after encryption. GCM and ChaCha20 detect any tampering down to the byte.
+
+**Output file has no extension**
+This can happen with legacy files that were encrypted before the filename-embedding feature. Rename the output file manually with the correct extension.
+
+**Folder not restored correctly**
+Make sure you have write permissions to your Desktop and enough free disk space for the uncompressed folder contents.
+
+---
+
+## Notes
+
+- Always select the **same algorithm** that was used during encryption — there is no auto-detection
+- The `~/Desktop/keys/` folder must be intact for key-file-based decryption
+- AES-256-GCM and ChaCha20-Poly1305 will refuse to decrypt if the file has been tampered with — this is a security feature, not a bug
+- Large file mode automatically engages based on the encrypted file size (over 250MB)
+
+---
+
+## Dependencies
+
+```
 pip3 install cryptography --break-system-packages
 ```
 
-**"python3: command not found"**
-Python 3 is not installed. Run:
-```bash
-brew install python
-```
-
-**App closes immediately or shows a traceback**
-Make sure you are running Python 3.11 or higher:
-```bash
-python3 --version
-```
-If you see 3.9 or lower, upgrade with `brew upgrade python`.
-
----
-
-## Dependencies Summary
-
-| Dependency | Install Command | Purpose |
-|------------|-----------------|---------|
-| Homebrew | See Step 1 above | macOS package manager |
-| Python 3.11+ | `brew install python` | Required to run the app |
-| cryptography | `pip3 install cryptography --break-system-packages` | All encryption/decryption algorithms |
-
-No other installs, brews, or dependencies are required.
-
----
-
-## Security Notes
-
-- Password-based keys are derived using **PBKDF2 with SHA-256 and 480,000 iterations** — this is intentionally slow to resist brute force attacks
-- The salt and nonce are embedded in every encrypted file automatically — you only need the password or key file to decrypt
-- AES-256-GCM and ChaCha20-Poly1305 include **authentication tags** that detect any tampering with the encrypted file
-- XOR and Caesar ciphers are included for educational purposes only — do not use them for anything sensitive
-- RSA private key files are stored unencrypted on disk — protect them accordingly
+Python's built-in `tarfile`, `struct`, `os`, `tempfile` handle everything else.
